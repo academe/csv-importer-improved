@@ -1,15 +1,16 @@
 <?php
 /*
-Plugin Name: CSV Importer
-Description: Import data as posts from a CSV file. <em>You can reach the author at <a href="mailto:d.v.kobozev@gmail.com">d.v.kobozev@gmail.com</a></em>.
-Version: 0.3.8
-Author: Denis Kobozev
+Plugin Name: CSV Importer 2
+Description: Import data as posts from a CSV file.
+Version: 0.4.0
+Author: Jason judge, Denis Kobozev
 */
 
 /**
  * LICENSE: The MIT License {{{
  *
  * Copyright (c) <2009> <Denis Kobozev>
+ * Copyright (c) <2015> <Jason Judge>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -40,7 +41,7 @@ class CSVImporterPlugin {
         'csv_post_title'      => null,
         'csv_post_post'       => null,
         'csv_post_type'       => null,
-        'csv_post_excerpt'    => null,
+        'csv_post_excerpt'    => '',
         'csv_post_date'       => null,
         'csv_post_tags'       => null,
         'csv_post_categories' => null,
@@ -618,10 +619,8 @@ class CSVImporterPlugin {
 function csv_admin_menu() {
     require_once ABSPATH . '/wp-admin/admin.php';
     $plugin = new CSVImporterPlugin;
-    add_management_page('edit.php', 'CSV Importer', 'manage_options', __FILE__,
+    add_management_page('edit.php', 'CSV Importer 2', 'manage_options', __FILE__,
         array($plugin, 'form'));
 }
 
 add_action('admin_menu', 'csv_admin_menu');
-
-?>
