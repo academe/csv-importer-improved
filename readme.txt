@@ -260,6 +260,9 @@ Contributors:
 
 == Changelog ==
 
+= 0.4.1 =
+*   Fix some function name clashes with other CSV import plugins.
+
 = 0.4.0 =
 *   Fixes to support WordPress 4.4
 
@@ -335,12 +338,6 @@ Contributors:
 
 
 == Upgrade Notice ==
-
-= 0.4.1 =
-Fix some function name clashes with other CSV import plugins.
-
-= 0.4.0 =
-Some fixes for WordPress 4.4
 
 = 0.3.8 =
 Added a check to see if the user is allowed to create posts and pages prior
