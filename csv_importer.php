@@ -36,7 +36,7 @@ Author: Jason judge, Denis Kobozev
  * }}}
  */
 
-class CSVImporterPlugin {
+class CSVImporter2Plugin {
     var $defaults = array(
         'csv_post_title'      => null,
         'csv_post_post'       => null,
@@ -616,11 +616,13 @@ class CSVImporterPlugin {
 }
 
 
-function csv_admin_menu() {
+function csv_importer2_admin_menu() {
     require_once ABSPATH . '/wp-admin/admin.php';
-    $plugin = new CSVImporterPlugin;
-    add_management_page('edit.php', 'CSV Importer 2', 'manage_options', __FILE__,
-        array($plugin, 'form'));
+    $plugin = new CSVImporter2Plugin;
+    add_management_page(
+        'edit.php', 'CSV Importer 2', 'manage_options', __FILE__,
+        array($plugin, 'form')
+    );
 }
 
-add_action('admin_menu', 'csv_admin_menu');
+add_action('admin_menu', 'csv_importer2_admin_menu');

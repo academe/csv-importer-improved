@@ -260,6 +260,9 @@ Contributors:
 
 == Changelog ==
 
+= 0.4.0 =
+*   Fixes to support WordPress 4.4
+
 = 0.3.8 =
 *   Minor bug and security fixes
 
