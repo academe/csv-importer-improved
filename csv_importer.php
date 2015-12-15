@@ -1,8 +1,8 @@
 <?php
 /*
-Plugin Name: CSV Importer 2
+Plugin Name: CSV Importer Improved
 Description: Import data as posts from a CSV file.
-Version: 0.4.1
+Version: 0.4.2
 Author: Jason judge, Denis Kobozev
 */
 
@@ -36,7 +36,7 @@ Author: Jason judge, Denis Kobozev
  * }}}
  */
 
-class CSVImporter2Plugin {
+class CSVImporterImprovedPlugin {
     var $defaults = array(
         'csv_post_title'      => null,
         'csv_post_post'       => null,
@@ -616,13 +616,13 @@ class CSVImporter2Plugin {
 }
 
 
-function csv_importer2_admin_menu() {
+function csv_importer_improved_admin_menu() {
     require_once ABSPATH . '/wp-admin/admin.php';
-    $plugin = new CSVImporter2Plugin;
+    $plugin = new CSVImporterImprovedPlugin;
     add_management_page(
-        'edit.php', 'CSV Importer 2', 'manage_options', __FILE__,
+        'edit.php', 'CSV Importer Improved', 'manage_options', __FILE__,
         array($plugin, 'form')
     );
 }
 
-add_action('admin_menu', 'csv_importer2_admin_menu');
+add_action('admin_menu', 'csv_importer_improved_admin_menu');

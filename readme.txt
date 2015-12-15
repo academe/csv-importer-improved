@@ -1,9 +1,9 @@
-=== CSV Importer 2 ===
+=== CSV Importer Improved ===
 Contributors: judgej
 Tags: csv, import, batch, spreadsheet, excel
-Requires at least: 2.0.2
+Requires at least: 3.0.0
 Tested up to: 4.4
-Stable tag: 0.4.1
+Stable tag: 0.4.2
 
 Import posts from CSV files into WordPress.
 
@@ -259,6 +259,9 @@ Contributors:
 
 
 == Changelog ==
+
+= 0.4.2 =
+*   Renamed from "CSV Importer 2" to "CSV Importer Improved".
 
 = 0.4.1 =
 *   Fix some function name clashes with other CSV import plugins.
