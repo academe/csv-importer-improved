@@ -9,10 +9,12 @@ Import posts from CSV files into WordPress.
 
 == Description ==
 
-This plugin imports posts from CSV (Comma Separated Value) files into your
+This WordPress plugin imports posts from CSV (Comma Separated Value) files into your
 WordPress blog. It can prove extremely useful when you want to import a bunch
 of posts from an Excel document or the like - simply export your document into
 a CSV file and the plugin will take care of the rest.
+
+https://wordpress.org/plugins/csv-importer-improved/
 
 = Features =
 
@@ -34,7 +36,7 @@ be faster for large imports) but do be aware of any data integrity issues that m
 
 The development repository for this plugin can be found here:
 
-https://github.com/academe/csv-importer-2
+https://github.com/academe/csv-importer-improved
 
 Please feel free to raise issues there, and submit pull requests, as well as through
 the normal WordPress channels.
