@@ -2,7 +2,7 @@
 /*
 Plugin Name: CSV Importer Improved
 Description: Import data as posts from a CSV file.
-Version: 0.4.2
+Version: 0.4.3
 Author: Jason judge, Denis Kobozev
 */
 
@@ -36,8 +36,8 @@ Author: Jason judge, Denis Kobozev
  * }}}
  */
 
-class CSVImporterImprovedPlugin {
-    var $defaults = array(
+class Academe_CSVImporterImprovedPlugin {
+    public $defaults = array(
         'csv_post_title'      => null,
         'csv_post_post'       => null,
         'csv_post_type'       => null,
@@ -50,7 +50,7 @@ class CSVImporterImprovedPlugin {
         'csv_post_parent'     => 0,
     );
 
-    var $log = array();
+    public $log = array();
 
     /**
      * Determine value of option $name from database, $default value or $params,
@@ -66,11 +66,13 @@ class CSVImporterImprovedPlugin {
             $value = stripslashes($params[$name]);
         } elseif (array_key_exists('_'.$name, $params)) {
             // unchecked checkbox value
-            $value = stripslashes($params['_'.$name]);
+            $value = stripslashes($params['_' . $name]);
         } else {
             $value = null;
         }
+
         $stored_value = get_option($name);
+
         if ($value == null) {
             if ($stored_value === false) {
                 if (is_callable($default) &&
@@ -90,6 +92,7 @@ class CSVImporterImprovedPlugin {
                 update_option($name, $value);
             }
         }
+
         return $value;
     }
 
@@ -99,8 +102,12 @@ class CSVImporterImprovedPlugin {
      * @return void
      */
     function form() {
-        $opt_draft = $this->process_option('csv_importer_import_as_draft',
-            'publish', $_POST);
+        $opt_draft = $this->process_option(
+            'csv_importer_import_as_draft',
+            'publish',
+            $_POST
+        );
+
         $opt_cat = $this->process_option('csv_importer_cat', 0, $_POST);
 
         if ('POST' == $_SERVER['REQUEST_METHOD']) {
@@ -120,11 +127,11 @@ class CSVImporterImprovedPlugin {
         </p>
 
         <!-- Parent category -->
-        <p>Organize into category <?php wp_dropdown_categories(array('show_option_all' => 'Select one ...', 'hide_empty' => 0, 'hierarchical' => 1, 'show_count' => 0, 'name' => 'csv_importer_cat', 'orderby' => 'name', 'selected' => $opt_cat));?><br/>
+        <p>Organize into category <?php wp_dropdown_categories(array('show_option_all' => 'Select one ...', 'hide_empty' => 0, 'hierarchical' => 1, 'show_count' => 0, 'name' => 'csv_importer_cat', 'orderby' => 'name', 'selected' => $opt_cat));?><br />
             <small>This will create new categories inside the category parent you choose.</small></p>
 
         <!-- File input -->
-        <p><label for="csv_import">Upload file:</label><br/>
+        <p><label for="csv_import">Upload file:</label><br />
             <input name="csv_import" id="csv_import" type="file" value="" aria-required="true" /></p>
         <p class="submit"><input type="submit" class="button" name="submit" value="Import" /></p>
     </form>
@@ -212,7 +219,9 @@ class CSVImporterImprovedPlugin {
         // WordPress sets the correct timezone for date functions somewhere
         // in the bowels of wp_insert_post(). We need strtotime() to return
         // correct time before the call to wp_insert_post().
+
         $tz = get_option('timezone_string');
+
         if ($tz && function_exists('date_default_timezone_set')) {
             date_default_timezone_set($tz);
         }
@@ -220,6 +229,7 @@ class CSVImporterImprovedPlugin {
         $skipped = 0;
         $imported = 0;
         $comments = 0;
+
         foreach ($csv->connect() as $csv_data) {
             if ($post_id = $this->create_post($csv_data, $options)) {
                 $imported++;
@@ -237,20 +247,37 @@ class CSVImporterImprovedPlugin {
         $exec_time = microtime(true) - $time_start;
 
         if ($skipped) {
-            $this->log['notice'][] = "<b>Skipped {$skipped} posts (most likely due to empty title, body and excerpt).</b>";
+            $this->log['notice'][] = sprintf(
+                '<strong>Skipped %d posts (most likely due to empty title, body and excerpt).</strong>',
+                $skipped
+            );
         }
-        $this->log['notice'][] = sprintf("<b>Imported {$imported} posts and {$comments} comments in %.2f seconds.</b>", $exec_time);
+
+        $this->log['notice'][] = sprintf(
+            '<strong>Imported %d posts and %d comments in %.2f seconds.</strong>',
+            $imported,
+            $comments,
+            $exec_time
+        );
+
         $this->print_messages();
     }
 
+    /**
+     * TODO: support create or update post.
+     * Update supported if an ID is supplied and it matches an existing post.
+     */
     function create_post($data, $options) {
         $opt_draft = isset($options['opt_draft']) ? $options['opt_draft'] : null;
         $opt_cat = isset($options['opt_cat']) ? $options['opt_cat'] : null;
 
         $data = array_merge($this->defaults, $data);
         $type = $data['csv_post_type'] ? $data['csv_post_type'] : 'post';
-        $valid_type = (function_exists('post_type_exists') &&
-            post_type_exists($type)) || in_array($type, array('post', 'page'));
+
+        $valid_type = (
+            function_exists('post_type_exists')
+            && post_type_exists($type)
+        ) || in_array($type, array('post', 'page'));
 
         if (!$valid_type) {
             $this->log['error']["type-{$type}"] = sprintf(
@@ -270,7 +297,8 @@ class CSVImporterImprovedPlugin {
             'post_parent'  => $data['csv_post_parent'],
         );
 
-        // pages don't have tags or categories
+        // Pages don't have tags or categories.
+
         if ('page' !== $type) {
             $new_post['tags_input'] = $data['csv_post_tags'];
 
@@ -278,6 +306,7 @@ class CSVImporterImprovedPlugin {
             // faster, but I don't exactly remember why :) Most likely because
             // we don't assign default cat to post when csv_post_categories
             // is not empty.
+
             $cats = $this->create_or_get_categories($data, $opt_cat);
             $new_post['post_category'] = $cats['post'];
         }
@@ -291,6 +320,7 @@ class CSVImporterImprovedPlugin {
                 wp_delete_term($c, 'category');
             }
         }
+
         return $id;
     }
 
@@ -306,7 +336,9 @@ class CSVImporterImprovedPlugin {
             'post' => array(),
             'cleanup' => array(),
         );
+
         $items = array_map('trim', explode(',', $data['csv_post_categories']));
+
         foreach ($items as $item) {
             if (is_numeric($item)) {
                 if (get_category($item) !== null) {
@@ -318,7 +350,9 @@ class CSVImporterImprovedPlugin {
                 $parent_id = $common_parent_id;
                 // item can be a single category name or a string such as
                 // Parent > Child > Grandchild
+
                 $categories = array_map('trim', explode('>', $item));
+
                 if (count($categories) > 1 && is_numeric($categories[0])) {
                     $parent_id = $categories[0];
                     if (get_category($parent_id) !== null) {
@@ -329,6 +363,7 @@ class CSVImporterImprovedPlugin {
                         continue;
                     }
                 }
+
                 foreach ($categories as $category) {
                     if ($category) {
                         $term = $this->term_exists($category, 'category', $parent_id);
@@ -344,9 +379,11 @@ class CSVImporterImprovedPlugin {
                         $parent_id = $term_id;
                     }
                 }
+
                 $ids['post'][] = $term_id;
             }
         }
+
         return $ids;
     }
 
@@ -365,6 +402,7 @@ class CSVImporterImprovedPlugin {
      */
     function get_taxonomies($data) {
         $taxonomies = array();
+
         foreach ($data as $k => $v) {
             if (preg_match('/^csv_ctax_(.*)$/', $k, $matches)) {
                 $t_name = $matches[1];
@@ -376,6 +414,7 @@ class CSVImporterImprovedPlugin {
                 }
             }
         }
+
         return $taxonomies;
     }
 
@@ -422,6 +461,7 @@ class CSVImporterImprovedPlugin {
                     }
                 }
             }
+
             return $term_ids;
         } else {
             return $field;
@@ -458,6 +498,7 @@ class CSVImporterImprovedPlugin {
      */
     function _parse_tax($field) {
         $data = array();
+
         if (function_exists('str_getcsv')) { // PHP 5 >= 5.3.0
             $lines = $this->split_lines($field);
 
@@ -468,13 +509,16 @@ class CSVImporterImprovedPlugin {
             // Use temp files for older PHP versions. Reusing the tmp file for
             // the duration of the script might be faster, but not necessarily
             // significant.
+
             $handle = tmpfile();
+
             fwrite($handle, $field);
             fseek($handle, 0);
 
             while (($r = fgetcsv($handle, 999999, ',', '"')) !== false) {
                 $data[] = $r;
             }
+
             fclose($handle);
         }
         return $data;
@@ -491,7 +535,9 @@ class CSVImporterImprovedPlugin {
 
     function add_comments($post_id, $data) {
         // First get a list of the comments for this post
+
         $comments = array();
+
         foreach ($data as $k => $v) {
             // comments start with cvs_comment_
             if (    preg_match('/^csv_comment_([^_]+)_(.*)/', $k, $matches) &&
@@ -499,8 +545,10 @@ class CSVImporterImprovedPlugin {
                 $comments[$matches[1]] = 1;
             }
         }
+
         // Sort this list which specifies the order they are inserted, in case
         // that matters somewhere
+
         ksort($comments);
 
         // Now go through each comment and insert it. More fields are possible
@@ -515,32 +563,41 @@ class CSVImporterImprovedPlugin {
 
             if (isset($data["csv_comment_{$cid}_author"])) {
                 $new_comment['comment_author'] = convert_chars(
-                    $data["csv_comment_{$cid}_author"]);
+                    $data["csv_comment_{$cid}_author"]
+                );
             }
+
             if (isset($data["csv_comment_{$cid}_author_email"])) {
                 $new_comment['comment_author_email'] = convert_chars(
-                    $data["csv_comment_{$cid}_author_email"]);
+                    $data["csv_comment_{$cid}_author_email"]
+                );
             }
+
             if (isset($data["csv_comment_{$cid}_url"])) {
                 $new_comment['comment_author_url'] = convert_chars(
-                    $data["csv_comment_{$cid}_url"]);
+                    $data["csv_comment_{$cid}_url"]
+                );
             }
             if (isset($data["csv_comment_{$cid}_content"])) {
                 $new_comment['comment_content'] = convert_chars(
-                    $data["csv_comment_{$cid}_content"]);
+                    $data["csv_comment_{$cid}_content"]
+                );
             }
+
             if (isset($data["csv_comment_{$cid}_date"])) {
                 $new_comment['comment_date'] = $this->parse_date(
                     $data["csv_comment_{$cid}_date"]);
             }
 
             $id = wp_insert_comment($new_comment);
+
             if ($id) {
                 $count++;
             } else {
-                $this->log['error'][] = "Could not add comment $cid";
+                $this->log['error'][] = sprintf('Could not add comment %d', $cid);
             }
         }
+
         return $count;
     }
 
@@ -559,6 +616,7 @@ class CSVImporterImprovedPlugin {
         }
 
         // get_userdatabylogin is deprecated as of 3.3.0
+
         if (function_exists('get_user_by')) {
             $author_data = get_user_by('login', $author);
         } else {
@@ -576,6 +634,7 @@ class CSVImporterImprovedPlugin {
      */
     function parse_date($data) {
         $timestamp = strtotime($data);
+
         if (false === $timestamp) {
             return '';
         } else {
@@ -591,6 +650,7 @@ class CSVImporterImprovedPlugin {
      */
     function stripBOM($fname) {
         $res = fopen($fname, 'rb');
+
         if (false !== $res) {
             $bytes = fread($res, 3);
             if ($bytes == pack('CCC', 0xef, 0xbb, 0xbf)) {
@@ -598,11 +658,14 @@ class CSVImporterImprovedPlugin {
                 fclose($res);
 
                 $contents = file_get_contents($fname);
+
                 if (false === $contents) {
                     trigger_error('Failed to get file contents.', E_USER_WARNING);
                 }
+
                 $contents = substr($contents, 3);
                 $success = file_put_contents($fname, $contents);
+
                 if (false === $success) {
                     trigger_error('Failed to put file contents.', E_USER_WARNING);
                 }
@@ -618,7 +681,8 @@ class CSVImporterImprovedPlugin {
 
 function csv_importer_improved_admin_menu() {
     require_once ABSPATH . '/wp-admin/admin.php';
-    $plugin = new CSVImporterImprovedPlugin;
+    $plugin = new Academe_CSVImporterImprovedPlugin;
+
     add_management_page(
         'edit.php', 'CSV Importer Improved', 'manage_options', __FILE__,
         array($plugin, 'form')
