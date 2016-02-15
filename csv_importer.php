@@ -2,7 +2,7 @@
 /*
 Plugin Name: CSV Importer Improved
 Description: Import data as posts from a CSV file.
-Version: 0.4.3
+Version: 0.5.0
 Author: Jason judge, Denis Kobozev
 */
 
@@ -38,10 +38,11 @@ Author: Jason judge, Denis Kobozev
 
 class Academe_CSVImporterImprovedPlugin {
     public $defaults = array(
+        'csv_post_id'         => null,
         'csv_post_title'      => null,
         'csv_post_post'       => null,
         'csv_post_type'       => null,
-        'csv_post_excerpt'    => '',
+        'csv_post_excerpt'    => null,
         'csv_post_date'       => null,
         'csv_post_tags'       => null,
         'csv_post_categories' => null,
@@ -231,7 +232,7 @@ class Academe_CSVImporterImprovedPlugin {
         $comments = 0;
 
         foreach ($csv->connect() as $csv_data) {
-            if ($post_id = $this->create_post($csv_data, $options)) {
+            if ($post_id = $this->create_or_update_post($csv_data, $options)) {
                 $imported++;
                 $comments += $this->add_comments($post_id, $csv_data);
                 $this->create_custom_fields($post_id, $csv_data);
@@ -264,15 +265,17 @@ class Academe_CSVImporterImprovedPlugin {
     }
 
     /**
-     * TODO: support create or update post.
+     * Support create or update post.
      * Update supported if an ID is supplied and it matches an existing post.
      */
-    function create_post($data, $options) {
+    function create_or_update_post($data, $options) {
         $opt_draft = isset($options['opt_draft']) ? $options['opt_draft'] : null;
         $opt_cat = isset($options['opt_cat']) ? $options['opt_cat'] : null;
 
         $data = array_merge($this->defaults, $data);
         $type = $data['csv_post_type'] ? $data['csv_post_type'] : 'post';
+
+        // Is this a valid post type?
 
         $valid_type = (
             function_exists('post_type_exists')
@@ -281,21 +284,60 @@ class Academe_CSVImporterImprovedPlugin {
 
         if (!$valid_type) {
             $this->log['error']["type-{$type}"] = sprintf(
-                'Unknown post type "%s".', $type);
+                'Unknown post type "%s".', $type
+            );
+
+            return;
         }
 
+        // If we have an existigng ID, then we will be wanting to update a post.
+        $existing_id = convert_chars(trim($data['csv_post_id']));
+
+        // If updating, we only want to set what we are given.
+        // If creating, then set everything we can.
+
         $new_post = array(
-            'post_title'   => convert_chars($data['csv_post_title']),
-            'post_content' => wpautop(convert_chars($data['csv_post_post'])),
-            'post_status'  => $opt_draft,
             'post_type'    => $type,
-            'post_date'    => $this->parse_date($data['csv_post_date']),
-            'post_excerpt' => convert_chars($data['csv_post_excerpt']),
-            'post_name'    => $data['csv_post_slug'],
-            'post_author'  => $this->get_auth_id($data['csv_post_author']),
             'tax_input'    => $this->get_taxonomies($data),
-            'post_parent'  => $data['csv_post_parent'],
         );
+
+        if (isset($existing_id)) {
+            $new_post['ID'] = $existing_id;
+        }
+
+        // If updating, then only set the non-null attributes.
+
+        if (!isset($existing_id) || isset($data['csv_post_title'])) {
+            $new_post['post_title'] = convert_chars($data['csv_post_title']);
+        }
+
+        if (!isset($existing_id) || isset($data['csv_post_post'])) {
+            $new_post['post_content'] = wpautop(convert_chars($data['csv_post_post']));
+        }
+
+        if (!isset($existing_id)) {
+            $new_post['post_status']  = $opt_draft;
+        }
+
+        if (!isset($existing_id) || isset($data['csv_post_date'])) {
+            $new_post['post_date'] = $this->parse_date($data['csv_post_date']);
+        }
+
+        if (!isset($existing_id) || isset($data['csv_post_excerpt'])) {
+            $new_post['post_excerpt'] = convert_chars($data['csv_post_excerpt']);
+        }
+
+        if (!isset($existing_id) || isset($data['csv_post_slug'])) {
+            $new_post['post_name'] = $data['csv_post_slug'];
+        }
+
+        if (!isset($existing_id) || isset($data['csv_post_author'])) {
+            $new_post['post_author'] = $this->get_auth_id($data['csv_post_author']);
+        }
+
+        if (!isset($existing_id) || isset($data['csv_post_parent'])) {
+            $new_post['post_parent'] = $data['csv_post_parent'];
+        }
 
         // Pages don't have tags or categories.
 
@@ -311,10 +353,35 @@ class Academe_CSVImporterImprovedPlugin {
             $new_post['post_category'] = $cats['post'];
         }
 
-        // create!
-        $id = wp_insert_post($new_post);
+        if (!empty($existing_id)) {
+            // Check that the post already exists, and is of the correct type.
+            $existing_post_type = get_post_type($existing_id);
 
-        if ('page' !== $type && !$id) {
+            if (!$existing_post_type) {
+                $this->log['error'][] = sprintf('Post %d to update does not exist.', $existing_id);
+
+                return;
+            }
+
+            if ($existing_post_type != $type) {
+                $this->log['error'][] = sprintf(
+                    'Post %d to update is type "%s" but we are expecting "%s".',
+                    $existing_id,
+                    $existing_post_type,
+                    $type
+                );
+
+                return;
+            }
+
+            // Update!
+            $id = wp_update_post($new_post);
+        } else {
+            // Create!
+            $id = wp_insert_post($new_post);
+        }
+
+        if ('page' !== $type && !$id && empty($existing_id)) {
             // cleanup new categories on failure
             foreach ($cats['cleanup'] as $c) {
                 wp_delete_term($c, 'category');

@@ -3,7 +3,7 @@ Contributors: judgej
 Tags: csv, import, batch, spreadsheet, excel
 Requires at least: 3.0.0
 Tested up to: 4.4.2
-Stable tag: 0.4.3
+Stable tag: 0.5.0
 
 Import posts from CSV files into WordPress.
 
@@ -69,8 +69,14 @@ CSV is a tabular format that consists of rows and columns. Each row in
 a CSV file represents a post; each column identifies a piece of information
 that comprises a post.
 
+You can create new posts, or update existing posts by supplying the csv_post_id
+field pointing to an existing post. When updating, all field names you provide
+in the CSV file will be updated - even if blank - but fields you don't list at
+the head of the CSV file will be left intact.
+
 = Basic post information =
 
+*   `csv_post_id` - optional, used to update an existing post.
 *   `csv_post_title` - title of the post
 *   `csv_post_post` - body of the post
 *   `csv_post_type` - `post`, `page` or a custom post type.
@@ -262,8 +268,9 @@ Contributors:
 
 == Changelog ==
 
-= 0.4.3 =
+= 0.5.0 =
 *   Update PHP version to 5.3+
+*   Support updating existing posts.
 
 = 0.4.2 =
 *   Renamed from "CSV Importer 2" to "CSV Importer Improved".
