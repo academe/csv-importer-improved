@@ -2,8 +2,8 @@
 Contributors: judgej
 Tags: csv, import, batch, spreadsheet, excel
 Requires at least: 3.0.0
-Tested up to: 4.4.2
-Stable tag: 0.5.1
+Tested up to: 4.6.1
+Stable tag: 0.5.2
 
 Import posts from CSV files into WordPress.
 
@@ -33,6 +33,8 @@ in order to keep up with changes to the core WordPress.
 This importer writes directly to the database. It does not go through the internal
 WordPress objects for creating posts etc. That may be an advantage to you (it will
 be faster for large imports) but do be aware of any data integrity issues that may arrise.
+
+Only UTF-8 encoding is supported, both with and without Byte Order Marks (BOM).
 
 The development repository for this plugin can be found here:
 
@@ -80,7 +82,6 @@ the head of the CSV file will be left intact.
 *   `csv_post_title` - title of the post
 *   `csv_post_post` - body of the post
 *   `csv_post_type` - `post`, `page` or a custom post type.
-    __New in version 0.3.2__
     In prior versions, importing rows as pages could be specified on a
     per-file basis using the plugins UI. In 0.3.2, `csv_post_type` column
     was added to support custom post types as well.
@@ -89,17 +90,16 @@ the head of the CSV file will be left intact.
     on how to set up custom post types.
 *   `csv_post_excerpt` - post excerpt
 *   `csv_post_categories` - a comma separated list of category names or ids.
-    __New in version 0.3.5__
-    It's also possible to assign posts to non-existing subcategories, using
-    &gt; to denote category relationships, e.g. `Animalia > Chordata > Mammalia`.
-    If any of the categories in the chain does not exist, the plugin will
-    automatically create it. It's also possible to specify the parent category
-    using an id, as in `42 > Primates > Callitrichidae`, where `42` is an
+    The list must be enclosed in quotes, e.g. "EC > UK, Island".
+    If a chain of subcategories does not exist, e.g. `Animalia > Chordata > Mammalia`
+    then they will all be created and the post assigned to the end of the chain.
+    The parent category can also be defined using its id, e.g.
+    `42 > Primates > Callitrichidae`, where `42` is an
     existing category id.
-*   `csv_post_tags` - a comma separated list of tags.
-*   `csv_post_date` - about any English textual description of a date and time.
+*   `csv_post_tags` - a "quoted" comma separated list of tags.
+*   `csv_post_date` - most standard formats are supported.
     For example, `now`, `11/16/2009 0:00`, `1999-12-31 23:55:00`, `+1 week`,
-    `next Thursday`, `last year` are all valid descriptions. For technical
+    `next Thursday`, `last year` are all valid. For technical
     details, consult PHP's `strtotime()` function [documentation][strtotime].
 
 [custom_post_types]: http://codex.wordpress.org/Custom_Post_Types

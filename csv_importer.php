@@ -2,8 +2,9 @@
 /*
 Plugin Name: CSV Importer Improved
 Description: Import data as posts from a CSV file.
-Version: 0.5.1
+Version: 0.5.2
 Author: Jason judge, Denis Kobozev
+Tags: csv, import, batch, spreadsheet, excel
 */
 
 /**
@@ -471,6 +472,7 @@ class Academe_CSVImporterImprovedPlugin {
                     }
                 }
 
+                $term_id = null;
                 foreach ($categories as $category) {
                     if ($category) {
                         $term = $this->term_exists($category, 'category', $parent_id);
@@ -483,11 +485,14 @@ class Academe_CSVImporterImprovedPlugin {
                             ));
                             $ids['cleanup'][] = $term_id;
                         }
+
                         $parent_id = $term_id;
                     }
                 }
 
-                $ids['post'][] = $term_id;
+                if (isset($term_id)) {
+                    $ids['post'][] = $term_id;
+                }
             }
         }
 
@@ -495,7 +500,7 @@ class Academe_CSVImporterImprovedPlugin {
     }
 
     /**
-     * Parse taxonomy data from the file
+     * Parse taxonomy data from the file.
      *
      * array(
      *      // hierarchical taxonomy name => ID array
@@ -514,8 +519,7 @@ class Academe_CSVImporterImprovedPlugin {
             if (preg_match('/^csv_ctax_(.*)$/', $k, $matches)) {
                 $t_name = $matches[1];
                 if ($this->taxonomy_exists($t_name)) {
-                    $taxonomies[$t_name] = $this->create_terms($t_name,
-                        $data[$k]);
+                    $taxonomies[$t_name] = $this->create_terms($t_name, $data[$k]);
                 } else {
                     $this->log['error'][] = sprintf(__('Unknown taxonomy %s', 'csv-importer-improved'), $t_name);
                 }
@@ -540,13 +544,16 @@ class Academe_CSVImporterImprovedPlugin {
             foreach ($this->_parse_tax($field) as $row) {
                 list($parent, $child) = $row;
                 $parent_ok = true;
+
                 if ($parent) {
                     $parent_info = $this->term_exists($parent, $taxonomy);
-                    if (!$parent_info) {
+
+                    if (! $parent_info) {
                         // create parent
                         $parent_info = wp_insert_term($parent, $taxonomy);
                     }
-                    if (!is_wp_error($parent_info)) {
+
+                    if (! is_wp_error($parent_info)) {
                         $parent_id = $parent_info['term_id'];
                     } else {
                         // could not find or create parent
@@ -558,12 +565,16 @@ class Academe_CSVImporterImprovedPlugin {
 
                 if ($parent_ok) {
                     $child_info = $this->term_exists($child, $taxonomy, $parent_id);
-                    if (!$child_info) {
+                    if (! $child_info) {
                         // create child
-                        $child_info = wp_insert_term($child, $taxonomy,
-                            array('parent' => $parent_id));
+                        $child_info = wp_insert_term(
+                            $child,
+                            $taxonomy,
+                            array('parent' => $parent_id)
+                        );
                     }
-                    if (!is_wp_error($child_info)) {
+
+                    if (! is_wp_error($child_info)) {
                         $term_ids[] = $child_info['term_id'];
                     }
                 }
@@ -628,6 +639,7 @@ class Academe_CSVImporterImprovedPlugin {
 
             fclose($handle);
         }
+
         return $data;
     }
 
@@ -647,8 +659,7 @@ class Academe_CSVImporterImprovedPlugin {
 
         foreach ($data as $k => $v) {
             // comments start with cvs_comment_
-            if (    preg_match('/^csv_comment_([^_]+)_(.*)/', $k, $matches) &&
-                    $v != '') {
+            if (preg_match('/^csv_comment_([^_]+)_(.*)/', $k, $matches) && $v != '') {
                 $comments[$matches[1]] = 1;
             }
         }
@@ -662,6 +673,7 @@ class Academe_CSVImporterImprovedPlugin {
         // in principle (see docu of wp_insert_comment), but I didn't have data
         // for them so I didn't test them, so I didn't include them.
         $count = 0;
+
         foreach ($comments as $cid => $v) {
             $new_comment = array(
                 'comment_post_ID' => $post_id,
@@ -685,6 +697,7 @@ class Academe_CSVImporterImprovedPlugin {
                     $data["csv_comment_{$cid}_url"]
                 );
             }
+
             if (isset($data["csv_comment_{$cid}_content"])) {
                 $new_comment['comment_content'] = convert_chars(
                     $data["csv_comment_{$cid}_content"]
@@ -711,7 +724,7 @@ class Academe_CSVImporterImprovedPlugin {
     function create_custom_fields($post_id, $data) {
         foreach ($data as $k => $v) {
             // anything that doesn't start with csv_ is a custom field
-            if (!preg_match('/^csv_/', $k) && $v != '') {
+            if (! preg_match('/^csv_/', $k) && $v != '') {
                 add_post_meta($post_id, $k, $v);
             }
         }
@@ -751,6 +764,9 @@ class Academe_CSVImporterImprovedPlugin {
 
     /**
      * Delete BOM from UTF-8 file.
+     * This seems like a really clumsy way to do it - read the file into
+     * memory, remove three bytes, then wite it back to disk. We should be
+     * stripping out the BOM simply reading the file as a stream.
      *
      * @param string $fname
      * @return void
@@ -760,6 +776,7 @@ class Academe_CSVImporterImprovedPlugin {
 
         if (false !== $res) {
             $bytes = fread($res, 3);
+            // UTF-8 BOM
             if ($bytes == pack('CCC', 0xef, 0xbb, 0xbf)) {
                 $this->log['notice'][] = __('Getting rid of byte order mark...', 'csv-importer-improved');
                 fclose($res);
