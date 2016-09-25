@@ -2,7 +2,7 @@
 /*
 Plugin Name: CSV Importer Improved
 Description: Import data as posts from a CSV file.
-Version: 0.5.0
+Version: 0.5.1
 Author: Jason judge, Denis Kobozev
 */
 

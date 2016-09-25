@@ -3,7 +3,7 @@ Contributors: judgej
 Tags: csv, import, batch, spreadsheet, excel
 Requires at least: 3.0.0
 Tested up to: 4.4.2
-Stable tag: 0.5.0
+Stable tag: 0.5.1
 
 Import posts from CSV files into WordPress.
 
@@ -267,6 +267,10 @@ Contributors:
 
 
 == Changelog ==
+
+= 0.5.1 =
+* Fix incorrect intitial status.
+* Started making strings translatable.
 
 = 0.5.0 =
 *   Update PHP version to 5.3+
