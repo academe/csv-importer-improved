@@ -123,18 +123,30 @@ class Academe_CSVImporterImprovedPlugin {
     <form class="add:the-list: validate" method="post" enctype="multipart/form-data">
         <!-- Import as draft -->
         <p>
-        <input name="_csv_importer_import_as_draft" type="hidden" value="publish" />
-        <label><input name="csv_importer_import_as_draft" type="checkbox" <?php if ('draft' == $opt_draft) { echo 'checked="checked"'; } ?> value="draft" /> Import posts as drafts</label>
+            <input name="_csv_importer_import_as_draft" type="hidden" value="publish" />
+            <label>
+                <input name="csv_importer_import_as_draft" type="checkbox" <?php if ('draft' == $opt_draft) { echo 'checked="checked"'; } ?> value="draft" /> <?php _e('Import new posts as drafts', 'csv-importer-improved') ?>
+            </label>
         </p>
 
         <!-- Parent category -->
-        <p>Organize into category <?php wp_dropdown_categories(array('show_option_all' => 'Select one ...', 'hide_empty' => 0, 'hierarchical' => 1, 'show_count' => 0, 'name' => 'csv_importer_cat', 'orderby' => 'name', 'selected' => $opt_cat));?><br />
-            <small>This will create new categories inside the category parent you choose.</small></p>
+        <p>
+            <?php _e('Organize into category', 'csv-importer-improved') ?>
+            <?php wp_dropdown_categories(array('show_option_all' => __('No category', 'csv-importer-improved'), 'hide_empty' => 0, 'hierarchical' => 1, 'show_count' => 0, 'name' => 'csv_importer_cat', 'orderby' => 'name', 'selected' => $opt_cat));?>
+            <br />
+            <small>
+                <?php _e('This will create new categories inside the category parent you choose.', 'csv-importer-improved') ?>
+            </small>
+        </p>
 
         <!-- File input -->
-        <p><label for="csv_import">Upload file:</label><br />
-            <input name="csv_import" id="csv_import" type="file" value="" aria-required="true" /></p>
-        <p class="submit"><input type="submit" class="button" name="submit" value="Import" /></p>
+        <p>
+            <label for="csv_import"><?php _e('Upload file:', 'csv-importer-improved') ?></label><br />
+            <input name="csv_import" id="csv_import" type="file" value="" aria-required="true" />
+        </p>
+        <p class="submit">
+            <input type="submit" class="button" name="submit" value="<?php _e('Import', 'csv-importer-improved') ?>" />
+        </p>
     </form>
 </div><!-- end wrap -->
 
@@ -190,13 +202,13 @@ class Academe_CSVImporterImprovedPlugin {
      */
     function post($options) {
         if (empty($_FILES['csv_import']['tmp_name'])) {
-            $this->log['error'][] = 'No file uploaded, aborting.';
+            $this->log['error'][] = __('No file uploaded, aborting.', 'csv-importer-improved');
             $this->print_messages();
             return;
         }
 
-        if (!current_user_can('publish_pages') || !current_user_can('publish_posts')) {
-            $this->log['error'][] = 'You don\'t have the permissions to publish posts and pages. Please contact the blog\'s administrator.';
+        if (! current_user_can('publish_pages') || !current_user_can('publish_posts')) {
+            $this->log['error'][] = __('You don\'t have the permissions to publish posts and pages. Please contact the blog\'s administrator.', 'csv-importer-improved');
             $this->print_messages();
             return;
         }
@@ -209,7 +221,7 @@ class Academe_CSVImporterImprovedPlugin {
         $this->stripBOM($file);
 
         if (!$csv->load($file)) {
-            $this->log['error'][] = 'Failed to load file, aborting.';
+            $this->log['error'][] = __('Failed to load file, aborting.', 'csv-importer-improved');
             $this->print_messages();
             return;
         }
@@ -249,13 +261,17 @@ class Academe_CSVImporterImprovedPlugin {
 
         if ($skipped) {
             $this->log['notice'][] = sprintf(
-                '<strong>Skipped %d posts (most likely due to empty title, body and excerpt).</strong>',
+                '<strong>'
+                    . __('Skipped %d posts (most likely due to empty title, body and excerpt).', 'csv-importer-improved')
+                    . '</strong>',
                 $skipped
             );
         }
 
         $this->log['notice'][] = sprintf(
-            '<strong>Imported %d posts and %d comments in %.2f seconds.</strong>',
+            '<strong>'
+                . __('Imported %d posts and %d comments in %.2f seconds.', 'csv-importer-improved')
+                . '</strong>',
             $imported,
             $comments,
             $exec_time
@@ -297,8 +313,8 @@ class Academe_CSVImporterImprovedPlugin {
         // If creating, then set everything we can.
 
         $new_post = array(
-            'post_type'    => $type,
-            'tax_input'    => $this->get_taxonomies($data),
+            'post_type' => $type,
+            'tax_input' => $this->get_taxonomies($data),
         );
 
         if (isset($existing_id)) {
@@ -315,16 +331,23 @@ class Academe_CSVImporterImprovedPlugin {
             $new_post['post_content'] = wpautop(convert_chars($data['csv_post_post']));
         }
 
-        // FIXME: the logic here is still not right. The rules are supposed to be:
+        // The rule is:
         // * A new post must always have its status set.
         // * An existing post must have its status set only if overridden.
-        // * A status in the CSV data will override the "import posts as drafts" checkbox (i.e. $opt_draft).
+        // * A status in the CSV data will override the "import new posts as drafts" checkbox (i.e. $opt_draft).
 
-        if (! isset($existing_id) || isset($data['csv_post_status'])) {
-            $new_post['post_status'] =
-                (isset($data['csv_post_status']) && $data['csv_post_status'] != '')
-                ? $data['csv_post_status']
-                : $opt_draft;
+        if (! isset($existing_id)) {
+            // No post ID, so is a new post, so default the status to the
+            // requested value ('published' or 'draft').
+
+            $new_post['post_status'] = $opt_draft;
+        }
+
+        if (isset($data['csv_post_status']) && $data['csv_post_status'] != '') {
+            // A status has been given in the data, so use that (overriding the
+            // default status if necessary).
+
+            $new_post['post_status'] = $data['csv_post_status'];
         }
 
         if (!isset($existing_id) || isset($data['csv_post_date'])) {
@@ -366,14 +389,17 @@ class Academe_CSVImporterImprovedPlugin {
             $existing_post_type = get_post_type($existing_id);
 
             if (!$existing_post_type) {
-                $this->log['error'][] = sprintf('Post %d to update does not exist.', $existing_id);
+                $this->log['error'][] = sprintf(
+                    __('Post %d to update does not exist.', 'csv-importer-improved'),
+                    $existing_id
+                );
 
                 return;
             }
 
             if ($existing_post_type != $type) {
                 $this->log['error'][] = sprintf(
-                    'Post %d to update is type "%s" but we are expecting "%s".',
+                    __('Post %d to update is type "%s" but we are expecting "%s".', 'csv-importer-improved'),
                     $existing_id,
                     $existing_post_type,
                     $type
@@ -419,7 +445,10 @@ class Academe_CSVImporterImprovedPlugin {
                 if (get_category($item) !== null) {
                     $ids['post'][] = $item;
                 } else {
-                    $this->log['error'][] = "Category ID {$item} does not exist, skipping.";
+                    $this->log['error'][] = sprintf(
+                        __('Category ID %s does not exist, skipping.', 'csv-importer-improved'),
+                        $item
+                    );
                 }
             } else {
                 $parent_id = $common_parent_id;
@@ -434,7 +463,10 @@ class Academe_CSVImporterImprovedPlugin {
                         // valid id, everything's ok
                         $categories = array_slice($categories, 1);
                     } else {
-                        $this->log['error'][] = "Category ID {$parent_id} does not exist, skipping.";
+                        $this->log['error'][] = sprintf(
+                            __('Category ID %s does not exist, skipping.', 'csv-importer-improved'),
+                            $parent_id
+                        );
                         continue;
                     }
                 }
@@ -485,7 +517,7 @@ class Academe_CSVImporterImprovedPlugin {
                     $taxonomies[$t_name] = $this->create_terms($t_name,
                         $data[$k]);
                 } else {
-                    $this->log['error'][] = "Unknown taxonomy $t_name";
+                    $this->log['error'][] = sprintf(__('Unknown taxonomy %s', 'csv-importer-improved'), $t_name);
                 }
             }
         }
@@ -729,26 +761,26 @@ class Academe_CSVImporterImprovedPlugin {
         if (false !== $res) {
             $bytes = fread($res, 3);
             if ($bytes == pack('CCC', 0xef, 0xbb, 0xbf)) {
-                $this->log['notice'][] = 'Getting rid of byte order mark...';
+                $this->log['notice'][] = __('Getting rid of byte order mark...', 'csv-importer-improved');
                 fclose($res);
 
                 $contents = file_get_contents($fname);
 
                 if (false === $contents) {
-                    trigger_error('Failed to get file contents.', E_USER_WARNING);
+                    trigger_error(__('Failed to get file contents.', 'csv-importer-improved'), E_USER_WARNING);
                 }
 
                 $contents = substr($contents, 3);
                 $success = file_put_contents($fname, $contents);
 
                 if (false === $success) {
-                    trigger_error('Failed to put file contents.', E_USER_WARNING);
+                    trigger_error(__('Failed to put file contents.', 'csv-importer-improved'), E_USER_WARNING);
                 }
             } else {
                 fclose($res);
             }
         } else {
-            $this->log['error'][] = 'Failed to open file, aborting.';
+            $this->log['error'][] = __('Failed to open file, aborting.', 'csv-importer-improved');
         }
     }
 }
