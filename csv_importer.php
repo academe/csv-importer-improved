@@ -2,9 +2,8 @@
 /*
 Plugin Name: CSV Importer Improved
 Description: Import data as posts from a CSV file.
-Version: 0.5.2
+Version: 0.5.3
 Author: Jason judge, Denis Kobozev
-Tags: csv, import, batch, spreadsheet, excel
 */
 
 /**
