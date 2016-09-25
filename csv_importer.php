@@ -291,7 +291,7 @@ class Academe_CSVImporterImprovedPlugin {
         }
 
         // If we have an existigng ID, then we will be wanting to update a post.
-        $existing_id = convert_chars(trim($data['csv_post_id']));
+        $existing_id = isset($data['csv_post_id']) ? convert_chars(trim($data['csv_post_id'])) : null;
 
         // If updating, we only want to set what we are given.
         // If creating, then set everything we can.
@@ -307,16 +307,24 @@ class Academe_CSVImporterImprovedPlugin {
 
         // If updating, then only set the non-null attributes.
 
-        if (!isset($existing_id) || isset($data['csv_post_title'])) {
+        if (! isset($existing_id) || isset($data['csv_post_title'])) {
             $new_post['post_title'] = convert_chars($data['csv_post_title']);
         }
 
-        if (!isset($existing_id) || isset($data['csv_post_post'])) {
+        if (! isset($existing_id) || isset($data['csv_post_post'])) {
             $new_post['post_content'] = wpautop(convert_chars($data['csv_post_post']));
         }
 
-        if (!isset($existing_id)) {
-            $new_post['post_status']  = $opt_draft;
+        // FIXME: the logic here is still not right. The rules are supposed to be:
+        // * A new post must always have its status set.
+        // * An existing post must have its status set only if overridden.
+        // * A status in the CSV data will override the "import posts as drafts" checkbox (i.e. $opt_draft).
+
+        if (! isset($existing_id) || isset($data['csv_post_status'])) {
+            $new_post['post_status'] =
+                (isset($data['csv_post_status']) && $data['csv_post_status'] != '')
+                ? $data['csv_post_status']
+                : $opt_draft;
         }
 
         if (!isset($existing_id) || isset($data['csv_post_date'])) {
