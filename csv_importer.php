@@ -2,7 +2,7 @@
 /*
 Plugin Name: CSV Importer Improved
 Description: Import data as posts from a CSV file.
-Version: 0.5.4
+Version: 0.6.0
 Author: Jason judge, Denis Kobozev
 */
 
@@ -724,7 +724,7 @@ class Academe_CSVImporterImprovedPlugin {
         foreach ($data as $k => $v) {
             // anything that doesn't start with csv_ is a custom field
             if (! preg_match('/^csv_/', $k) && $v != '') {
-                add_post_meta($post_id, $k, $v);
+                update_post_meta($post_id, $k, $v);
             }
         }
     }

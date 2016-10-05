@@ -3,7 +3,7 @@ Contributors: judgej
 Tags: csv, import, batch, spreadsheet, excel
 Requires at least: 3.0.0
 Tested up to: 4.6.1
-Stable tag: 0.5.4
+Stable tag: 0.6.0
 
 Import posts from CSV files into WordPress.
 
@@ -48,7 +48,6 @@ the normal WordPress channels.
 
 1.  Plugin interface
 
-
 == Installation ==
 
 Installing the plugin:
@@ -82,9 +81,7 @@ the head of the CSV file will be left intact.
 *   `csv_post_title` - title of the post
 *   `csv_post_post` - body of the post
 *   `csv_post_type` - `post`, `page` or a custom post type.
-    In prior versions, importing rows as pages could be specified on a
-    per-file basis using the plugins UI. In 0.3.2, `csv_post_type` column
-    was added to support custom post types as well.
+    From 0.3.2, `csv_post_type` column supports custom post types.
     Refer to the WordPress
     [documentation on custom post types][custom_post_types] for more info
     on how to set up custom post types.
@@ -109,6 +106,11 @@ the head of the CSV file will be left intact.
 
 Any column that doesn't start with `csv_` is considered to be a custom field
 name. The data in that column will be imported as the custom fields value.
+
+All custom fields must be unique. Multiple fields with the same name will be
+updated to the same value if updating an existing post.
+Prior to version 0.6.0 loading the same field name multiple times to an existing
+post would create multiple custom fields.
 
 = General remarks =
 
