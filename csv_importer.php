@@ -2,7 +2,7 @@
 /*
 Plugin Name: CSV Importer Improved
 Description: Import data as posts from a CSV file.
-Version: 0.6.0
+Version: 0.6.1
 Author: Jason judge, Denis Kobozev
 */
 
@@ -289,16 +289,14 @@ class Academe_CSVImporterImprovedPlugin {
         $opt_cat = isset($options['opt_cat']) ? $options['opt_cat'] : null;
 
         $data = array_merge($this->defaults, $data);
-        $type = $data['csv_post_type'] ? $data['csv_post_type'] : 'post';
+        $type = $data['csv_post_type'] ?: 'post';
 
         // Is this a valid post type?
 
-        $valid_type = (
-            function_exists('post_type_exists')
-            && post_type_exists($type)
-        ) || in_array($type, array('post', 'page'));
+        $valid_type = (function_exists('post_type_exists') && post_type_exists($type))
+            || in_array($type, array('post', 'page'));
 
-        if (!$valid_type) {
+        if (! $valid_type) {
             $this->log['error']["type-{$type}"] = sprintf(
                 'Unknown post type "%s".', $type
             );
@@ -350,11 +348,11 @@ class Academe_CSVImporterImprovedPlugin {
             $new_post['post_status'] = $data['csv_post_status'];
         }
 
-        if (!isset($existing_id) || isset($data['csv_post_date'])) {
+        if (! isset($existing_id) || isset($data['csv_post_date'])) {
             $new_post['post_date'] = $this->parse_date($data['csv_post_date']);
         }
 
-        if (!isset($existing_id) || isset($data['csv_post_excerpt'])) {
+        if (! isset($existing_id) || isset($data['csv_post_excerpt'])) {
             $new_post['post_excerpt'] = convert_chars($data['csv_post_excerpt']);
         }
 
@@ -384,11 +382,21 @@ class Academe_CSVImporterImprovedPlugin {
             $new_post['post_category'] = $cats['post'];
         }
 
-        if (!empty($existing_id)) {
+        // Collect together just the non-null post fields, those that have a value set,
+        // even if an enpty string.
+
+        $set_post_fields = array();
+        foreach($new_post as $name => $value) {
+            if ($value !== null) {
+                $set_post_fields[$name] = $value;
+            }
+        }
+
+        if (! empty($existing_id)) {
             // Check that the post already exists, and is of the correct type.
             $existing_post_type = get_post_type($existing_id);
 
-            if (!$existing_post_type) {
+            if (! $existing_post_type) {
                 $this->log['error'][] = sprintf(
                     __('Post %d to update does not exist.', 'csv-importer-improved'),
                     $existing_id
@@ -409,10 +417,10 @@ class Academe_CSVImporterImprovedPlugin {
             }
 
             // Update!
-            $id = wp_update_post($new_post);
+            $id = wp_update_post($set_post_fields);
         } else {
             // Create!
-            $id = wp_insert_post($new_post);
+            $id = wp_insert_post($set_post_fields);
         }
 
         if ('page' !== $type && !$id && empty($existing_id)) {
