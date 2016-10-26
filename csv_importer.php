@@ -53,6 +53,8 @@ class Academe_CSVImporterImprovedPlugin {
 
     public $log = array();
 
+    protected $row_number = 0;
+
     /**
      * Determine value of option $name from database, $default value or $params,
      * save it to the db if needed and return it.
@@ -120,6 +122,7 @@ class Academe_CSVImporterImprovedPlugin {
 
 <div class="wrap">
     <h2>Import CSV</h2>
+
     <form class="add:the-list: validate" method="post" enctype="multipart/form-data">
         <!-- Import as draft -->
         <p>
@@ -195,20 +198,23 @@ class Academe_CSVImporterImprovedPlugin {
     }
 
     /**
-     * Handle POST submission
+     * Handle POST submission.
      *
      * @param array $options
      * @return void
      */
     function post($options) {
         if (empty($_FILES['csv_import']['tmp_name'])) {
-            $this->log['error'][] = __('No file uploaded, aborting.', 'csv-importer-improved');
+            $this->log('error', 'No file uploaded, aborting.');
             $this->print_messages();
             return;
         }
 
-        if (! current_user_can('publish_pages') || !current_user_can('publish_posts')) {
-            $this->log['error'][] = __('You don\'t have the permissions to publish posts and pages. Please contact the blog\'s administrator.', 'csv-importer-improved');
+        if (! current_user_can('publish_pages') || ! current_user_can('publish_posts')) {
+            $this->log(
+                'error',
+                'You don\'t have the permissions to publish posts and pages. Please contact the blog\'s administrator.'
+            );
             $this->print_messages();
             return;
         }
@@ -221,7 +227,7 @@ class Academe_CSVImporterImprovedPlugin {
         $this->stripBOM($file);
 
         if (!$csv->load($file)) {
-            $this->log['error'][] = __('Failed to load file, aborting.', 'csv-importer-improved');
+            $this->log('error', 'Failed to load file, aborting.');
             $this->print_messages();
             return;
         }
@@ -244,6 +250,9 @@ class Academe_CSVImporterImprovedPlugin {
         $comments = 0;
 
         foreach ($csv->connect() as $csv_data) {
+            // As soon as the row number is non-zero, it will be added to the log entries.
+            $this->row_number++;
+
             if ($post_id = $this->create_or_update_post($csv_data, $options)) {
                 $imported++;
                 $comments += $this->add_comments($post_id, $csv_data);
@@ -253,6 +262,9 @@ class Academe_CSVImporterImprovedPlugin {
             }
         }
 
+        // Reset the row number so it does not get reported with final notifications.
+        $this->row_number = 0;
+
         if (file_exists($file)) {
             @unlink($file);
         }
@@ -260,18 +272,16 @@ class Academe_CSVImporterImprovedPlugin {
         $exec_time = microtime(true) - $time_start;
 
         if ($skipped) {
-            $this->log['notice'][] = sprintf(
-                '<strong>'
-                    . __('Skipped %d posts (most likely due to empty title, body and excerpt).', 'csv-importer-improved')
-                    . '</strong>',
+            $this->log(
+                'notice',
+                'Skipped %d posts (most likely due to empty title, body and excerpt).',
                 $skipped
             );
         }
 
-        $this->log['notice'][] = sprintf(
-            '<strong>'
-                . __('Imported %d posts and %d comments in %.2f seconds.', 'csv-importer-improved')
-                . '</strong>',
+        $this->log(
+            'notice',
+            'Imported %d posts and %d comments in %.2f seconds.',
             $imported,
             $comments,
             $exec_time
@@ -297,9 +307,7 @@ class Academe_CSVImporterImprovedPlugin {
             || in_array($type, array('post', 'page'));
 
         if (! $valid_type) {
-            $this->log['error']["type-{$type}"] = sprintf(
-                'Unknown post type "%s".', $type
-            );
+            $this->log('error', 'Unknown post type "%s".', $type);
 
             return;
         }
@@ -397,17 +405,15 @@ class Academe_CSVImporterImprovedPlugin {
             $existing_post_type = get_post_type($existing_id);
 
             if (! $existing_post_type) {
-                $this->log['error'][] = sprintf(
-                    __('Post %d to update does not exist.', 'csv-importer-improved'),
-                    $existing_id
-                );
+                $this->log('error', 'Post %d to update does not exist.', $existing_id);
 
                 return;
             }
 
             if ($existing_post_type != $type) {
-                $this->log['error'][] = sprintf(
-                    __('Post %d to update is type "%s" but we are expecting "%s".', 'csv-importer-improved'),
+                $this->log(
+                    'error',
+                    'Post %d to update is type "%s" but we are expecting "%s".',
                     $existing_id,
                     $existing_post_type,
                     $type
@@ -436,7 +442,7 @@ class Academe_CSVImporterImprovedPlugin {
     /**
      * Return an array of category ids for a post.
      *
-     * @param string  $data csv_post_categories cell contents
+     * @param string $data csv_post_categories cell contents
      * @param integer $common_parent_id common parent id for all categories
      * @return array category ids
      */
@@ -453,10 +459,7 @@ class Academe_CSVImporterImprovedPlugin {
                 if (get_category($item) !== null) {
                     $ids['post'][] = $item;
                 } else {
-                    $this->log['error'][] = sprintf(
-                        __('Category ID %s does not exist, skipping.', 'csv-importer-improved'),
-                        $item
-                    );
+                    $this->log('error', 'Category ID %s does not exist, skipping.', $item);
                 }
             } else {
                 $parent_id = $common_parent_id;
@@ -471,10 +474,7 @@ class Academe_CSVImporterImprovedPlugin {
                         // valid id, everything's ok
                         $categories = array_slice($categories, 1);
                     } else {
-                        $this->log['error'][] = sprintf(
-                            __('Category ID %s does not exist, skipping.', 'csv-importer-improved'),
-                            $parent_id
-                        );
+                        $this->log('error', 'Category ID %s does not exist, skipping.', $parent_id);
                         continue;
                     }
                 }
@@ -523,12 +523,13 @@ class Academe_CSVImporterImprovedPlugin {
         $taxonomies = array();
 
         foreach ($data as $k => $v) {
-            if (preg_match('/^csv_ctax_(.*)$/', $k, $matches)) {
+            if (preg_match('/^csv_ctax_(.+)$/', $k, $matches)) {
                 $t_name = $matches[1];
+
                 if ($this->taxonomy_exists($t_name)) {
                     $taxonomies[$t_name] = $this->create_terms($t_name, $data[$k]);
                 } else {
-                    $this->log['error'][] = sprintf(__('Unknown taxonomy %s', 'csv-importer-improved'), $t_name);
+                    $this->log('error', 'Unknown taxonomy %s', $t_name);
                 }
             }
         }
@@ -548,8 +549,9 @@ class Academe_CSVImporterImprovedPlugin {
     function create_terms($taxonomy, $field) {
         if (is_taxonomy_hierarchical($taxonomy)) {
             $term_ids = array();
+
             foreach ($this->_parse_tax($field) as $row) {
-                list($parent, $child) = $row;
+                list($parent, $child) = $row; // FIXME: Notice: Undefined offset: 1
                 $parent_ok = true;
 
                 if ($parent) {
@@ -572,8 +574,9 @@ class Academe_CSVImporterImprovedPlugin {
 
                 if ($parent_ok) {
                     $child_info = $this->term_exists($child, $taxonomy, $parent_id);
+
                     if (! $child_info) {
-                        // create child
+                        // Create child.
                         $child_info = wp_insert_term(
                             $child,
                             $taxonomy,
@@ -646,7 +649,7 @@ class Academe_CSVImporterImprovedPlugin {
 
             fclose($handle);
         }
-
+//var_dump($field); var_dump($data); exit;
         return $data;
     }
 
@@ -721,7 +724,7 @@ class Academe_CSVImporterImprovedPlugin {
             if ($id) {
                 $count++;
             } else {
-                $this->log['error'][] = sprintf('Could not add comment %d', $cid);
+                $this->log('error', 'Could not add comment %d', $cid);
             }
         }
 
@@ -785,7 +788,7 @@ class Academe_CSVImporterImprovedPlugin {
             $bytes = fread($res, 3);
             // UTF-8 BOM
             if ($bytes == pack('CCC', 0xef, 0xbb, 0xbf)) {
-                $this->log['notice'][] = __('Getting rid of byte order mark...', 'csv-importer-improved');
+                $this->log('notice', 'Removing byte order mark.');
                 fclose($res);
 
                 $contents = file_get_contents($fname);
@@ -804,8 +807,37 @@ class Academe_CSVImporterImprovedPlugin {
                 fclose($res);
             }
         } else {
-            $this->log['error'][] = __('Failed to open file, aborting.', 'csv-importer-improved');
+            $this->log('error', 'Failed to open file, aborting.');
         }
+    }
+
+    /**
+     * Log an error or notice message.
+     * Translate the message and support substitution placeholders.
+     * Takes additional parameters as replacement strings for the placeholders.
+     * Prefixes the message with the source row number, if known.
+     */
+    function log($level, $message)
+    {
+        if (func_num_args() > 2) {
+            // Capture additional arguments.
+            $args = func_get_args();
+
+            // Shift off level and message.
+            array_shift($args);
+            array_shift($args);
+        } else {
+            $args = array();
+        }
+
+        // If we have a row number, then use it to prefix the message.
+        if (! empty($this->row_number)) {
+            $prefix = sprintf(__('Row %d: ', 'csv-importer-improved'), $this->row_number);
+        } else {
+            $prefix = '';
+        }
+
+        $this->log[$level][] = vsprintf($prefix . __($message, 'csv-importer-improved'), $args);
     }
 }
 

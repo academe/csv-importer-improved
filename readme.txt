@@ -270,6 +270,12 @@ Contributors:
 
 == Changelog ==
 
+= 0.6.2 =
+* List input row numbers with logged errors.
+
+= 0.6.1 =
+* Issue #5 Fix skipping of all rows when no excerpt column is given.
+
 = 0.6.0 =
 * Change behaviour of custom fields; treat all fields as unique and don't create duplicates.
 
