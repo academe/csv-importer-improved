@@ -37,6 +37,10 @@ Author: Jason judge, Denis Kobozev
  */
 
 class Academe_CSVImporterImprovedPlugin {
+    const TAX_NONE = false;
+    const TAX_HIERARCHICAL = 'hierarchical';
+    const TAX_FLAT = 'flat';
+
     public $defaults = array(
         'csv_post_id'         => null,
         'csv_post_title'      => null,
@@ -54,6 +58,8 @@ class Academe_CSVImporterImprovedPlugin {
     public $log = array();
 
     protected $row_number = 0;
+
+    protected $taxonomies;
 
     /**
      * Determine value of option $name from database, $default value or $params,
@@ -155,13 +161,12 @@ class Academe_CSVImporterImprovedPlugin {
 
 <?php
         // end form HTML }}}
-
     }
 
     function print_messages() {
         if (!empty($this->log)) {
 
-        // messages HTML {{{
+            // messages HTML {{{
 ?>
 
 <div class="wrap">
@@ -191,7 +196,7 @@ class Academe_CSVImporterImprovedPlugin {
 </div><!-- end wrap -->
 
 <?php
-        // end messages HTML }}}
+            // end messages HTML }}}
 
             $this->log = array();
         }
@@ -205,7 +210,7 @@ class Academe_CSVImporterImprovedPlugin {
      */
     function post($options) {
         if (empty($_FILES['csv_import']['tmp_name'])) {
-            $this->log('error', 'No file uploaded, aborting.');
+            $this->log('error', 'No file uploaded.');
             $this->print_messages();
             return;
         }
@@ -213,7 +218,7 @@ class Academe_CSVImporterImprovedPlugin {
         if (! current_user_can('publish_pages') || ! current_user_can('publish_posts')) {
             $this->log(
                 'error',
-                'You don\'t have the permissions to publish posts and pages. Please contact the blog\'s administrator.'
+                'You do not have the permissions to publish posts and pages.'
             );
             $this->print_messages();
             return;
@@ -224,15 +229,16 @@ class Academe_CSVImporterImprovedPlugin {
         $time_start = microtime(true);
         $csv = new File_CSV_DataSource;
         $file = $_FILES['csv_import']['tmp_name'];
+
         $this->stripBOM($file);
 
-        if (!$csv->load($file)) {
+        if (! $csv->load($file)) {
             $this->log('error', 'Failed to load file, aborting.');
             $this->print_messages();
             return;
         }
 
-        // pad shorter rows with empty values
+        // Pad shorter rows with empty values.
         $csv->symmetrize();
 
         // WordPress sets the correct timezone for date functions somewhere
@@ -323,6 +329,8 @@ class Academe_CSVImporterImprovedPlugin {
             'tax_input' => $this->get_taxonomies($data),
         );
 
+        $x = $this->create_or_get_taxonomies($data); //var_dump($x); return;
+
         if (isset($existing_id)) {
             $new_post['ID'] = $existing_id;
         }
@@ -369,7 +377,7 @@ class Academe_CSVImporterImprovedPlugin {
         }
 
         if (!isset($existing_id) || isset($data['csv_post_author'])) {
-            $new_post['post_author'] = $this->get_auth_id($data['csv_post_author']);
+            $new_post['post_author'] = $this->get_author_id($data['csv_post_author']);
         }
 
         if (!isset($existing_id) || isset($data['csv_post_parent'])) {
@@ -378,20 +386,16 @@ class Academe_CSVImporterImprovedPlugin {
 
         // Pages don't have tags or categories.
 
-        if ('page' !== $type) {
+        if ($type !== 'page') {
             $new_post['tags_input'] = $data['csv_post_tags'];
 
-            // Setup categories before inserting - this should make insertion
-            // faster, but I don't exactly remember why :) Most likely because
-            // we don't assign default cat to post when csv_post_categories
-            // is not empty.
-
-            $cats = $this->create_or_get_categories($data, $opt_cat);
-            $new_post['post_category'] = $cats['post'];
+            // Set up categories before inserting.
+            $categories = $this->create_or_get_categories($data, $opt_cat);
+            $new_post['post_category'] = $categories['all'];
         }
 
         // Collect together just the non-null post fields, those that have a value set,
-        // even if an enpty string.
+        // even if an empty string.
 
         $set_post_fields = array();
         foreach($new_post as $name => $value) {
@@ -401,7 +405,7 @@ class Academe_CSVImporterImprovedPlugin {
         }
 
         if (! empty($existing_id)) {
-            // Check that the post already exists, and is of the correct type.
+            // Check that the existing post is of the correct type.
             $existing_post_type = get_post_type($existing_id);
 
             if (! $existing_post_type) {
@@ -418,21 +422,20 @@ class Academe_CSVImporterImprovedPlugin {
                     $existing_post_type,
                     $type
                 );
-
-                return;
+            } else {
+                // Update!
+                $id = wp_update_post($set_post_fields);
             }
-
-            // Update!
-            $id = wp_update_post($set_post_fields);
         } else {
             // Create!
             $id = wp_insert_post($set_post_fields);
         }
 
-        if ('page' !== $type && !$id && empty($existing_id)) {
-            // cleanup new categories on failure
-            foreach ($cats['cleanup'] as $c) {
-                wp_delete_term($c, 'category');
+        // Clean up created categories on failure.
+        // TODO: extend this to all taxonomies, and also when updating a post.
+        if ($type !== 'page' && empty($id) && empty($existing_id)) {
+            foreach ($categories['created'] as $term_id) {
+                wp_delete_term($term_id, 'category');
             }
         }
 
@@ -440,38 +443,52 @@ class Academe_CSVImporterImprovedPlugin {
     }
 
     /**
-     * Return an array of category ids for a post.
+     * Return an array of category ids for a row, creating any categories necessary.
+     * Categories are always hierarchical.
      *
      * @param string $data csv_post_categories cell contents
      * @param integer $common_parent_id common parent id for all categories
      * @return array category ids
      */
-    function create_or_get_categories($data, $common_parent_id) {
+    function create_or_get_categories($data, $common_parent_id)
+    {
+        // "all" is all the category IDs for the data row.
+        // The "created" categories are those we needed to create.
         $ids = array(
-            'post' => array(),
-            'cleanup' => array(),
+            'all' => array(),
+            'created' => array(),
         );
 
+        // Split into multiple categories by ",".
         $items = array_map('trim', explode(',', $data['csv_post_categories']));
 
         foreach ($items as $item) {
+            // Each category can be supplied as a numeric ID or a name.
+            // The CSV item can contained mixed names and IDs.
+
             if (is_numeric($item)) {
                 if (get_category($item) !== null) {
-                    $ids['post'][] = $item;
+                    $ids['all'][] = $item;
                 } else {
                     $this->log('error', 'Category ID %s does not exist, skipping.', $item);
                 }
             } else {
                 $parent_id = $common_parent_id;
-                // item can be a single category name or a string such as
+
+                // Item can be a single category name or a string such as
                 // Parent > Child > Grandchild
 
                 $categories = array_map('trim', explode('>', $item));
 
+                // FIXME: we really need to check every level of the categories string (1>2>3 etc)
+                // to ensure any numeric term exists. It is not sufficient to just check the top
+                // level parent.
+
                 if (count($categories) > 1 && is_numeric($categories[0])) {
                     $parent_id = $categories[0];
+
                     if (get_category($parent_id) !== null) {
-                        // valid id, everything's ok
+                        // Valid id, everything's ok (not quite - see FIXME above).
                         $categories = array_slice($categories, 1);
                     } else {
                         $this->log('error', 'Category ID %s does not exist, skipping.', $parent_id);
@@ -480,9 +497,11 @@ class Academe_CSVImporterImprovedPlugin {
                 }
 
                 $term_id = null;
+
                 foreach ($categories as $category) {
                     if ($category) {
-                        $term = $this->term_exists($category, 'category', $parent_id);
+                        $term = term_exists($category, 'category', $parent_id);
+
                         if ($term) {
                             $term_id = $term['term_id'];
                         } else {
@@ -490,20 +509,110 @@ class Academe_CSVImporterImprovedPlugin {
                                 'cat_name' => $category,
                                 'category_parent' => $parent_id,
                             ));
-                            $ids['cleanup'][] = $term_id;
+                            $ids['created'][] = $term_id;
                         }
 
                         $parent_id = $term_id;
                     }
                 }
 
+                // Only the ID of the last term in the hierarchy of terms is added to the post.
                 if (isset($term_id)) {
-                    $ids['post'][] = $term_id;
+                    $ids['all'][] = $term_id;
                 }
             }
         }
 
         return $ids;
+    }
+
+    /**
+     * Scan the data row for custom taxonimies, and return the list of
+     * IDs for each taxonomy.
+     * Any taxonomies that need to be created, will be created.
+     * A taxonomy term can be supplied as an hierarchical string "A > 123 > Foo"
+     * whether the underlying taxonomy is hiearchical or not. If the taxonomy
+     * is not hiearchical, then only the last term will be used.
+     * Numeric terms will be treated as taxonomy term IDs.
+     * The return value will be an array indexed by taxonomy name. Each element
+     * will be an array containing two arrays of IDs - 'all' and 'new'.
+     */
+    function create_or_get_taxonomies($row, $common_parent_id = 0)
+    {
+        // Prefix for the taxonomy column name.
+        $prefix = 'csv_ctax_';
+
+        $taxonomies = array(
+            'all' => array(),
+            'new' => array(),
+        );
+
+        // Get the list of taxonomies once, then work from that list.
+        // This saves fetching the taxonomy details from the database over and over.
+        // It also means taxonomy errors will only be reported once, for the first row.
+
+        if ($this->taxonomies === null) {
+            $this->taxonomies = array();
+
+            foreach ($row as $column_name => $column_value) {
+                if (strpos($column_name, $prefix) !== 0 || strlen($column_name) <= strlen($prefix)) {
+                    // Not a recognised taxonomy column.
+                    continue;
+                }
+
+                // Everything after the prefix.
+                $taxonomy_name = substr($column_name, strlen($prefix));
+
+                if (! taxonomy_exists($taxonomy_name)) {
+                    $this->log('error', 'Unknown taxonomy "%s". Skipping this column.', $taxonomy_name);
+                    continue;
+                }
+
+                // Now we have a valid taxonomy.
+                $this->taxonomies[$taxonomy_name] = is_taxonomy_hierarchical($taxonomy_name)
+                    ? static::TAX_HIERARCHICAL
+                    : static::TAX_FLAT;
+            }
+        }
+
+        foreach($this->taxonomies as $column_name => $structure_type) {
+            $column_value = $row[$prefix . $column_name];
+
+            if ($column_value === null) {
+                // No terms for this row.
+                continue;
+            }
+
+            // The data value is a CSV or newline list of categories.
+            // A "\" will escape a comma if needed in a taxonomy name.
+
+            $category_items = array_map(
+                'trim',
+                str_replace(
+                    '\\,',
+                    ',',
+                    preg_split('/((?<!\\\\),|\r\n|\n|\r)/', $column_value)
+                )
+            );
+
+            // Now each category item must be processed.
+            foreach($category_items as $category_item) {
+                // Split into levels (A>B>C).
+                // There may just be one level.
+                $levels = array_map('trim', explode('>', $category_item));
+
+                // If the taxonomy is flat, then discard all but the last level.
+                if ($structure_type == static::TAX_FLAT) {
+                    $levels = end($levels);
+                }
+
+                // Go through the levels, making sure they are a valid hierarchy,
+                // and that all numeric IDs match existing terms.
+                // Create any terms that need creating on the way.
+            }
+        }
+
+        return $taxonomies;
     }
 
     /**
@@ -519,17 +628,18 @@ class Academe_CSVImporterImprovedPlugin {
      * @param array $data
      * @return array
      */
-    function get_taxonomies($data) {
+    function get_taxonomies($data)
+    {
         $taxonomies = array();
 
-        foreach ($data as $k => $v) {
-            if (preg_match('/^csv_ctax_(.+)$/', $k, $matches)) {
-                $t_name = $matches[1];
+        foreach ($data as $name => $value) {
+            if (preg_match('/^csv_ctax_(.+)$/', $name, $matches)) {
+                $taxonomy_name = $matches[1];
 
-                if ($this->taxonomy_exists($t_name)) {
-                    $taxonomies[$t_name] = $this->create_terms($t_name, $data[$k]);
+                if (taxonomy_exists($taxonomy_name)) {
+                    $taxonomies[$taxonomy_name] = $this->create_terms($taxonomy_name, $value);
                 } else {
-                    $this->log('error', 'Unknown taxonomy %s', $t_name);
+                    $this->log('error', 'Unknown taxonomy %s', $taxonomy_name);
                 }
             }
         }
@@ -542,12 +652,12 @@ class Academe_CSVImporterImprovedPlugin {
      * string from CSV for non-hierarchical taxonomies. The original string
      * should have the same format as csv_post_tags.
      *
-     * @param string $taxonomy
+     * @param string $taxonomy_name
      * @param string $field
      * @return mixed
      */
-    function create_terms($taxonomy, $field) {
-        if (is_taxonomy_hierarchical($taxonomy)) {
+    function create_terms($taxonomy_name, $field) {
+        if (is_taxonomy_hierarchical($taxonomy_name)) {
             $term_ids = array();
 
             foreach ($this->_parse_tax($field) as $row) {
@@ -555,11 +665,11 @@ class Academe_CSVImporterImprovedPlugin {
                 $parent_ok = true;
 
                 if ($parent) {
-                    $parent_info = $this->term_exists($parent, $taxonomy);
+                    $parent_info = term_exists($parent, $taxonomy_name);
 
                     if (! $parent_info) {
                         // create parent
-                        $parent_info = wp_insert_term($parent, $taxonomy);
+                        $parent_info = wp_insert_term($parent, $taxonomy_name);
                     }
 
                     if (! is_wp_error($parent_info)) {
@@ -573,13 +683,13 @@ class Academe_CSVImporterImprovedPlugin {
                 }
 
                 if ($parent_ok) {
-                    $child_info = $this->term_exists($child, $taxonomy, $parent_id);
+                    $child_info = term_exists($child, $taxonomy_name, $parent_id);
 
                     if (! $child_info) {
                         // Create child.
                         $child_info = wp_insert_term(
                             $child,
-                            $taxonomy,
+                            $taxonomy_name,
                             array('parent' => $parent_id)
                         );
                     }
@@ -597,28 +707,6 @@ class Academe_CSVImporterImprovedPlugin {
     }
 
     /**
-     * Compatibility wrapper for WordPress term lookup.
-     */
-    function term_exists($term, $taxonomy = '', $parent = 0) {
-        if (function_exists('term_exists')) { // 3.0 or later
-            return term_exists($term, $taxonomy, $parent);
-        } else {
-            return is_term($term, $taxonomy, $parent);
-        }
-    }
-
-    /**
-     * Compatibility wrapper for WordPress taxonomy lookup.
-     */
-    function taxonomy_exists($taxonomy) {
-        if (function_exists('taxonomy_exists')) { // 3.0 or later
-            return taxonomy_exists($taxonomy);
-        } else {
-            return is_taxonomy($taxonomy);
-        }
-    }
-
-    /**
      * Hierarchical taxonomy fields are tiny CSV files in their own right.
      *
      * @param string $field
@@ -627,29 +715,12 @@ class Academe_CSVImporterImprovedPlugin {
     function _parse_tax($field) {
         $data = array();
 
-        if (function_exists('str_getcsv')) { // PHP 5 >= 5.3.0
-            $lines = $this->split_lines($field);
+        $lines = $this->split_lines($field);
 
-            foreach ($lines as $line) {
-                $data[] = str_getcsv($line, ',', '"');
-            }
-        } else {
-            // Use temp files for older PHP versions. Reusing the tmp file for
-            // the duration of the script might be faster, but not necessarily
-            // significant.
-
-            $handle = tmpfile();
-
-            fwrite($handle, $field);
-            fseek($handle, 0);
-
-            while (($r = fgetcsv($handle, 999999, ',', '"')) !== false) {
-                $data[] = $r;
-            }
-
-            fclose($handle);
+        foreach ($lines as $line) {
+            $data[] = str_getcsv($line, ',', '"');
         }
-//var_dump($field); var_dump($data); exit;
+
         return $data;
     }
 
@@ -740,18 +811,12 @@ class Academe_CSVImporterImprovedPlugin {
         }
     }
 
-    function get_auth_id($author) {
+    function get_author_id($author) {
         if (is_numeric($author)) {
             return $author;
         }
 
-        // get_userdatabylogin is deprecated as of 3.3.0
-
-        if (function_exists('get_user_by')) {
-            $author_data = get_user_by('login', $author);
-        } else {
-            $author_data = get_userdatabylogin($author);
-        }
+        $author_data = get_user_by('login', $author);
 
         return ($author_data) ? $author_data->ID : 0;
     }
@@ -765,7 +830,7 @@ class Academe_CSVImporterImprovedPlugin {
     function parse_date($data) {
         $timestamp = strtotime($data);
 
-        if (false === $timestamp) {
+        if ($timestamp === false) {
             return '';
         } else {
             return date('Y-m-d H:i:s', $timestamp);
@@ -784,8 +849,9 @@ class Academe_CSVImporterImprovedPlugin {
     function stripBOM($fname) {
         $res = fopen($fname, 'rb');
 
-        if (false !== $res) {
+        if ($res !== false) {
             $bytes = fread($res, 3);
+
             // UTF-8 BOM
             if ($bytes == pack('CCC', 0xef, 0xbb, 0xbf)) {
                 $this->log('notice', 'Removing byte order mark.');
@@ -793,14 +859,14 @@ class Academe_CSVImporterImprovedPlugin {
 
                 $contents = file_get_contents($fname);
 
-                if (false === $contents) {
+                if ($contents === false) {
                     trigger_error(__('Failed to get file contents.', 'csv-importer-improved'), E_USER_WARNING);
                 }
 
                 $contents = substr($contents, 3);
                 $success = file_put_contents($fname, $contents);
 
-                if (false === $success) {
+                if ($success === false) {
                     trigger_error(__('Failed to put file contents.', 'csv-importer-improved'), E_USER_WARNING);
                 }
             } else {
@@ -819,16 +885,13 @@ class Academe_CSVImporterImprovedPlugin {
      */
     function log($level, $message)
     {
-        if (func_num_args() > 2) {
-            // Capture additional arguments.
-            $args = func_get_args();
+        // Capture additional arguments.
+        $args = func_get_args();
 
-            // Shift off level and message.
-            array_shift($args);
-            array_shift($args);
-        } else {
-            $args = array();
-        }
+        // Shift off "level" and "message".
+        // This may leave an empty array if there were just two arguments.
+        array_shift($args);
+        array_shift($args);
 
         // If we have a row number, then use it to prefix the message.
         if (! empty($this->row_number)) {

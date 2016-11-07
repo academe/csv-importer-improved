@@ -135,16 +135,17 @@ post would create multiple custom fields.
 
 == Custom taxonomies ==
 
-__New in version 0.3.0__
-
 Once custom taxonomies are set up in your theme's functions.php file or
-by using a 3rd party plugin, `csv_ctax_(taxonomy name)` columns can be 
+by using a 3rd party plugin, `csv_ctax_{taxonomy name}` columns can be 
 used to assign imported data to the taxonomies.
 
 __Non-hierarchical taxonomies__
 
 The syntax for non-hierarchical taxonomies is straightforward and is essentially
 the same as the `csv_post_tags` syntax.
+The value imported will become the `name`, and the `slug` will be generated from that.
+If the taxonomy term already exists, it will be used, otherwise it will be created first.
+Alternatively, numeric taxonomy IDs can be supplied.
 
 __Hierarchical taxonomies__
 
@@ -159,12 +160,16 @@ illustrates custom taxonomy support. To see how it works, make sure to set up
 custom taxonomies from `functions.inc.php`.
 
 Make sure that the quotation marks used as text delimiters in `csv_ctax_`
-columns are regular ASCII double quotes, not typographical quotes like “
-(U+201C) and ” (U+201D).
+columns are regular ASCII double quotes, not typographical or "smart" quotes
+like “ (U+201C) and ” (U+201D).
+
+__Column Number Mismatches__
+
+The header row will set the number of columns imported from the remaining data.
+Rows with too few columns will be padded with empty values.
+Rows with too many columns will have additional columns (on the end) discarded.
 
 == Comments ==
-
-__New in version 0.3.1__
 
 An example file with comments is included in the `examples` directory.
 In short, comments can be imported along with posts by specifying columns
@@ -233,22 +238,6 @@ to prove me wrong), so you can try to speed up WordPress. It is a pretty broad
 topic, ranging from database optimizations to PHP accelerators such as APC,
 eAccelerator or XCache, so I'm afraid you're on your own here.
 
-> I receive the following error when I try to import my CSV file: "Invalid CSV
-file: header length and/or row lengths do not match". What's wrong with your
-plugin/my file?
-
-Short answer: update to version 0.2.0 or later. Longer answer: the number of
-fields (values) in rows in your file does not match the number of columns.
-Version 0.2.0 pads such rows with empty values (if there are more columns than
-cells in a row) or discards extra fields (if there are less columns than cells
-in a row).
-
-> I'm getting the following error: `Parse error: syntax error, unexpected
-T_STRING, expecting T_OLD_FUNCTION or T_FUNCTION or T_VAR or '}' in .../public_html/wp-content/plugins/csv-importer/File_CSV_DataSource/DataSource.php
-on line 61`. What gives?
-
-This plugin requires PHP5, while you probably have PHP4 or older. Update your
-PHP installation or ask your hosting provider to do it for you.
 
 
 == Credits ==
@@ -258,6 +247,7 @@ It was inspired by JayBlogger's [CSV Import][4] plugin.
 
 Contributors:
 
+*   Jason Judge (record number logging; various fixes)
 *   Kevin Hagerty (post_author support)
 *   Edir Pedro (root category option and tableless HTML markup)
 *   Frank Loeffler (comments support)
@@ -271,6 +261,7 @@ Contributors:
 == Changelog ==
 
 = 0.6.2 =
+* Pull logging into a dedicated method.
 * List input row numbers with logged errors.
 
 = 0.6.1 =

@@ -2261,5 +2261,3 @@ class File_CSV_DataSource
     }
 
 }
-
-?>
