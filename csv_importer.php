@@ -305,7 +305,7 @@ class Academe_CSVImporterImprovedPlugin {
         $opt_cat = isset($options['opt_cat']) ? $options['opt_cat'] : null;
 
         $data = array_merge($this->defaults, $data);
-        $type = $data['csv_post_type'] ?: 'post';
+        $type = $data['csv_post_type'] ? $data['csv_post_type'] : 'post';
 
         // Is this a valid post type?
 
